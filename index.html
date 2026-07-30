@@ -3,11 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>화재 위험도 지도 — 설계 단계 분석</title>
+<title>zest | Graffiti — 화재 위험도 콘솔</title>
 <style>
   :root{
-    --bg:#e9edf1; --paper:#ffffff; --ink:#141a22; --ink2:#212c38;
-    --txt:#18212c; --dim:#6a7682; --line:#e0e5eb;
+    /* ZEST 톤: 화이트·차콜그린·틸 액센트·넉넉한 여백 (fire는 데이터 전용) */
+    --bg:#f4f7f5; --paper:#ffffff; --ink:#16261f; --ink2:#1e2f28;
+    --txt:#1c2b25; --dim:#6b7c74; --line:#e5ece8;
+    --accent:#12a074; --accent-weak:#e7f5ef;
     --fire:#e5322d; --safe:#1f8a5b; --amber:#e08a20; --violet:#6a4cff;
     --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Code",Menlo,monospace;
   }
@@ -18,26 +20,28 @@
     -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
   .data{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
-  /* ── 커맨드 바(다크 계기판) ── */
-  .cmd{background:var(--ink);color:#fff;padding:12px 20px;display:flex;align-items:center;
-    gap:22px;flex-wrap:wrap;position:sticky;top:0;z-index:10}
-  .brand{display:flex;align-items:center;gap:10px;font-size:15px}
-  .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--fire);
-    box-shadow:0 0 0 4px rgba(229,50,45,.22)}
-  .brand b{font-weight:700;letter-spacing:-.01em}
-  .brand .tag{color:#8b97a5;font-size:11px;text-transform:uppercase;letter-spacing:.08em;
-    border-left:1px solid #333f4c;padding-left:10px}
-  .ctrls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-left:auto}
+  /* ── 헤더(ZEST 라이트) ── */
+  .cmd{background:var(--paper);color:var(--ink);padding:14px 24px;display:flex;align-items:center;
+    gap:24px;flex-wrap:wrap;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10}
+  .brand{display:flex;align-items:baseline;gap:8px;font-size:20px;letter-spacing:-.02em}
+  .brand .mark{align-self:center;width:12px;height:12px;background:var(--accent);border-radius:3px;
+    transform:rotate(45deg);margin-right:3px}
+  .brand .z{color:var(--accent);font-weight:800}
+  .brand .sep{color:#c7d2cc;font-weight:300}
+  .brand .g{color:var(--ink);font-weight:750}
+  .brand .tag{color:var(--dim);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;
+    border-left:1px solid var(--line);padding-left:10px;align-self:center}
+  .ctrls{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-left:auto}
   .grp{display:flex;align-items:center;gap:8px}
-  .grp>label{color:#8b97a5;font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-  .cmd select{background:var(--ink2);color:#fff;border:1px solid #33414f;border-radius:9px;
-    padding:9px 12px;font-size:13px;font-weight:600;cursor:pointer}
-  .cmd .meta{color:#8b97a5;font-size:12px}
-  .seg{display:inline-flex;background:var(--ink2);border:1px solid #33414f;border-radius:10px;padding:3px;gap:3px}
-  .seg button{border:0;background:transparent;color:#aeb8c4;padding:8px 15px;font-size:13px;
-    font-weight:600;border-radius:7px;cursor:pointer;transition:.12s;white-space:nowrap}
-  .seg button:hover{color:#fff}
-  .seg button.on{background:var(--fire);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .grp>label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  .cmd select{background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:10px;
+    padding:9px 13px;font-size:13px;font-weight:600;cursor:pointer}
+  .cmd .meta{color:var(--dim);font-size:12px}
+  .seg{display:inline-flex;background:#eef3f0;border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px}
+  .seg button{border:0;background:transparent;color:var(--dim);padding:8px 15px;font-size:13px;
+    font-weight:600;border-radius:8px;cursor:pointer;transition:.12s;white-space:nowrap}
+  .seg button:hover{color:var(--ink)}
+  .seg button.on{background:var(--accent);color:#fff;box-shadow:0 1px 2px rgba(18,160,116,.35)}
 
   /* ── 작업 영역 (앱-셸: 화면 높이에 꽉, 지도는 남는 공간 채움) ── */
   .cmd{flex:none}
@@ -50,10 +54,6 @@
   .canvbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .canvbar .left{display:flex;align-items:center;gap:9px}
   .canvbar label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-  .canvbar .seg{background:#eef1f4;border:1px solid var(--line)}
-  .canvbar .seg button{color:var(--dim)}
-  .canvbar .seg button:hover{color:var(--txt)}
-  .canvbar .seg button.on{background:var(--ink);color:#fff;box-shadow:none}
   .canvbar .view{color:var(--dim);font-size:12px}
   canvas{max-width:100%;max-height:100%;width:auto;height:auto;display:block;background:#fcfdfe;
     border:1px solid var(--line);border-radius:10px}
@@ -87,7 +87,7 @@
 </head>
 <body>
   <header class="cmd">
-    <div class="brand"><span class="dot"></span><b>화재 위험도 콘솔</b><span class="tag">설계 단계 분석</span></div>
+    <div class="brand"><span class="mark"></span><span class="z">zest</span><span class="sep">|</span><span class="g">Graffiti</span><span class="tag">화재 위험도 · 설계 분석</span></div>
     <div class="ctrls">
       <div class="grp"><label>도면</label><select id="planSel"></select></div>
       <div class="grp"><label>모드</label>
@@ -182,8 +182,8 @@
     </div>
   </div>
 
-  <script src="data.js?v=14"></script>
-  <script src="risk.js?v=14"></script>
-  <script src="ui.js?v=14"></script>
+  <script src="data.js?v=15"></script>
+  <script src="risk.js?v=15"></script>
+  <script src="ui.js?v=15"></script>
 </body>
 </html>
