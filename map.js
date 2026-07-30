@@ -27,13 +27,14 @@
   ];
   const MAT = Object.fromEntries(MATLIB.map(m => [m.id, m]));
 
-  // 실 구획 (배경 이미지 대비 비율 rect) + 기본 기자재. 정리 도면 우측 세대 판독.
+  // 실 구획 (배경 이미지 대비 비율 rect) + 기본 기자재. 사용자 재구획(색 구역) 반영.
+  // 순서 = 겹침 우선순위: 작은 구역(욕실·현관)을 먼저 둔다.
   const ROOMS_F = [
-    { name:"욕실",     mat:"masonry_tile", fx:0.04, fy:0.07, fw:0.38, fh:0.27 },
-    { name:"현관",     mat:"conc_fire",    fx:0.44, fy:0.05, fw:0.28, fh:0.14 },
-    { name:"주방",     mat:"conc_eps_gyp", fx:0.68, fy:0.18, fw:0.30, fh:0.24 },
-    { name:"거실·침실", mat:"conc_eps_gyp", fx:0.03, fy:0.40, fw:0.95, fh:0.37 },
-    { name:"발코니",   mat:"glass_rail",   fx:0.03, fy:0.77, fw:0.95, fh:0.20 },
+    { name:"욕실",   mat:"masonry_tile", fx:0.08, fy:0.10, fw:0.34, fh:0.26 }, // 초록
+    { name:"현관",   mat:"conc_fire",    fx:0.41, fy:0.07, fw:0.50, fh:0.16 }, // 파랑
+    { name:"주방",   mat:"conc_eps_gyp", fx:0.06, fy:0.22, fw:0.86, fh:0.33 }, // 노랑
+    { name:"거실",   mat:"conc_eps_gyp", fx:0.07, fy:0.54, fw:0.87, fh:0.29 }, // 빨강
+    { name:"발코니", mat:"glass_rail",   fx:0.08, fy:0.82, fw:0.84, fh:0.15 }, // 자홍
   ];
   let rooms = [], selRoom = null;
   const buildRooms = () => { rooms = ROOMS_F.map(r => ({ name:r.name, mat:r.mat, x:r.fx*BG_W, y:r.fy*BG_H, w:r.fw*BG_W, d:r.fh*BG_H })); selRoom = null; };
@@ -129,13 +130,23 @@
     else { ctx.fillStyle="#8892a3"; ctx.font="13px 'Segoe UI'"; ctx.textAlign="center";
       ctx.fillText("도면 배경(floor-bg.png) 없음", ox+S(BG_W)/2, oy+S(BG_H)/2); ctx.textAlign="start"; }
     if (layer!=="plan"){ ctx.globalAlpha=heatOpacity; ctx.imageSmoothingEnabled=true; ctx.drawImage(heat,ox,oy,S(BG_W),S(BG_H)); ctx.globalAlpha=1; }
-    // 자재 편집 모드: 실 경계 + 선택 강조
+    // 자재 편집 모드: 실 구역 경계 + 이름 + 선택 강조
     if (mode==="mat"){
       for (const rm of rooms){
-        ctx.strokeStyle = rm===selRoom ? "#2e78ff" : "rgba(43,52,70,.35)";
-        ctx.lineWidth = rm===selRoom ? 3 : 1.2;
+        const on = rm===selRoom;
+        if (on){ ctx.fillStyle="rgba(46,120,255,.12)"; ctx.fillRect(ox+S(rm.x),oy+S(rm.y),S(rm.w),S(rm.d)); }
+        ctx.strokeStyle = on ? "#2e78ff" : "rgba(30,40,60,.6)";
+        ctx.lineWidth = on ? 3 : 1.5;
+        ctx.setLineDash(on ? [] : [7,4]);
         ctx.strokeRect(ox+S(rm.x), oy+S(rm.y), S(rm.w), S(rm.d));
-        if (rm===selRoom){ ctx.fillStyle="rgba(46,120,255,.10)"; ctx.fillRect(ox+S(rm.x),oy+S(rm.y),S(rm.w),S(rm.d)); }
+        ctx.setLineDash([]);
+        // 구역 이름 배지
+        const fs=Math.max(10,Math.min(15,scale*0.28));
+        ctx.font=`700 ${fs}px "Segoe UI"`; const tw=ctx.measureText(rm.name).width;
+        const bx=ox+S(rm.x)+4, by=oy+S(rm.y)+4;
+        ctx.fillStyle = on ? "rgba(46,120,255,.92)" : "rgba(30,40,60,.78)";
+        ctx.fillRect(bx, by, tw+10, fs+7);
+        ctx.fillStyle="#fff"; ctx.textBaseline="top"; ctx.fillText(rm.name, bx+5, by+4); ctx.textBaseline="alphabetic";
       }
     }
     ctx.strokeStyle="#2b3446"; ctx.lineWidth=2; ctx.strokeRect(ox,oy,S(BG_W),S(BG_H));
