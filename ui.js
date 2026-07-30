@@ -8,7 +8,9 @@
 
   let layout = null, field = null, selectedId = null, layer = "risk";
   let mode = "map", srcSet = new Set(), scen = null; // 발화점 시나리오 상태
-  let graphRef = null, wallsRef = null, matNoMap = {}, editTarget = null, ping = -1, pathRes = null, weightField = null;
+  let graphRef = null, wallsRef = null, matNoMap = {}, editTarget = null, ping = -1, routes = null, scenSafe = -1, weightField = null;
+  const FIRE_LEVEL = 10;                 // 발화점 = 강한 가중치
+  const ROUTE_COLORS = ["#2e78ff", "#12a074", "#e0a520"];
   const compName = id => layout.comps.find(c => c.id === id).name;
   const compMat = id => layout.comps.find(c => c.id === id).material;
   const LAYER_NAME = { risk: "통합(열+유독가스)", fire: "화염", gas: "유독가스", hard: "경도(파괴 난이도)" };
@@ -40,7 +42,7 @@
   function selectLayout(id) {
     layout = JSON.parse(JSON.stringify(LAYOUTS.find(L => L.id === id)));
     selectedId = null; $("matEdit").classList.remove("show"); $("planSel").value = id;
-    srcSet.clear(); scen = null; ping = -1; pathRes = null; editTarget = null;
+    srcSet.clear(); scen = null; ping = -1; routes = null; scenSafe = -1; editTarget = null;
     layout.weightPings = {}; weightField = null; // 격자 인덱스 의존 상태 초기화
     recompute();
     if (mode === "scenario") { loadCompanyList(); recomputeScenario(); }
@@ -243,44 +245,45 @@
   };
 
   function renderScenario() {
-    const g = field.grid;
-    if (scen && srcSet.size) drawHeat(scen.grid, scen.field);
+    const g = scen ? scen.grid : field.grid;
+    if (scen) drawHeat(scen.grid, scen.risk.field);   // 회사 가중치(+발화점) 반영 위험도
     drawGridLines(g);
     drawOutlines();
-    drawWalls(tierWallColor);   // 시나리오에도 경도(벽 진입난이도)+번호
-    // 불러온 회사 가중 지점(참고, 속 빈 링)
+    drawWalls(tierWallColor);
+    // 회사 가중 지점(참고 링)
     for (const [cell, level] of Object.entries(layout.weightPings || {})) {
       const [X, Y] = cellXY(g, +cell);
       ctx.save(); ctx.globalAlpha = .6; ctx.beginPath(); ctx.arc(X, Y, 7, 0, 7);
       ctx.fillStyle = "#fff"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = PLEVELS[Math.min(5, level) - 1]; ctx.stroke(); ctx.restore();
     }
-    // 안전 진입 경로
-    if (pathRes && pathRes.path.length > 1) {
-      ctx.save(); ctx.strokeStyle = "#2e78ff"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
-      ctx.beginPath();
-      pathRes.path.forEach((c, k) => { const [X, Y] = cellXY(g, c); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
+    // 경로 1·2·3안
+    if (routes) routes.forEach((r, i) => {
+      ctx.save(); ctx.strokeStyle = ROUTE_COLORS[i]; ctx.lineWidth = i === 0 ? 4.5 : 3; ctx.globalAlpha = i === 0 ? 1 : .8;
+      ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.setLineDash(i === 0 ? [] : [11, 7]);
+      ctx.beginPath(); r.path.forEach((c, k) => { const [X, Y] = cellXY(g, c); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); });
       ctx.stroke(); ctx.restore();
-      const [ex, ey] = cellXY(g, pathRes.entry); drawPin(ex, ey, "#2e78ff", "진입");
-    }
+    });
+    if (routes && routes[0]) { const [ex, ey] = cellXY(g, routes[0].entry); drawPin(ex, ey, "#2e78ff", "진입"); }
     for (const i of srcSet) { const [X, Y] = cellXY(g, i); drawPin(X, Y, "#e5322d", "발화"); }
-    if (scen && srcSet.size && scen.safe >= 0) { const [X, Y] = cellXY(g, scen.safe); drawPin(X, Y, "#1f8a5b", "안전"); }
+    if (scen && scenSafe >= 0) { const [X, Y] = cellXY(g, scenSafe); drawPin(X, Y, "#1f8a5b", "안전"); }
     if (ping >= 0) { const [X, Y] = cellXY(g, ping); drawPin(X, Y, "#9b30ff", "핑"); }
   }
 
   function recomputeScenario() {
-    scen = srcSet.size ? R.scenarioField(layout, [...srcSet]) : null;
-    const g = field.grid, n = g.cols * g.rows;
-    const fld = scen ? scen.field : new Float64Array(n);
-    pathRes = ping >= 0 ? R.safestPath(g, fld, ping) : null;
+    const extra = {}; for (const c of srcSet) extra[c] = FIRE_LEVEL;   // 발화점 = 강한 가중치
+    scen = R.computeField(layout, true, extra);                        // 회사 가중치 + 발화점
+    const g = scen.grid, fld = scen.risk.field, n = g.cols * g.rows;
+    scenSafe = -1; for (let i = 0; i < n; i++) { if (g.room[i] < 0) continue; if (scenSafe < 0 || fld[i] < fld[scenSafe]) scenSafe = i; }
+    routes = ping >= 0 ? R.safePaths(g, fld, ping, 3) : null;
     render();
-    if (!srcSet.size && ping < 0) {
-      $("scenInfo").textContent = "좌클릭 = 발화점 지정, 우클릭 = 목표 핑(안전 진입경로).";
-      $("scenSafe").textContent = ""; return;
-    }
-    $("scenInfo").textContent = srcSet.size ? `발화점 ${srcSet.size}곳 확산 시뮬레이션` : "발화점을 지정하면 위험 확산이 계산됩니다.";
+    $("scenInfo").textContent = srcSet.size
+      ? `발화점 ${srcSet.size}곳 · 회사 가중치 반영 위험도`
+      : "회사 선택 시 가중 위험도 표시 · 좌클릭 발화점 / 우클릭 목표 핑";
     let html = "";
-    if (scen && scen.safe >= 0) { const comp = layout.comps[g.room[scen.safe]]; html += `가장 안전: <span style="color:#1f8a5b">${comp.name} ${dirOf(g, scen.safe, comp)}측</span><br>`; }
-    html += pathRes ? `<span style="color:#2e78ff">안전 진입경로</span> 표시됨` : `<span class="muted">우클릭으로 핑을 찍으면 안전 진입경로 표시</span>`;
+    if (scenSafe >= 0) { const comp = layout.comps[g.room[scenSafe]]; html += `가장 안전: <span style="color:#1f8a5b">${comp.name} ${dirOf(g, scenSafe, comp)}측</span>`; }
+    if (routes) html += `<div style="margin-top:8px;font-size:12px">` + routes.map((r, i) =>
+      `<div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:3px;background:${ROUTE_COLORS[i]};display:inline-block"></span>안${i + 1} ${r.name} · ${Math.round(r.dist)}m · 노출 ${(r.avgExp * 100).toFixed(0)}%</div>`).join("") + `</div>`;
+    else html += `<div class="muted" style="margin-top:6px">우클릭으로 목표 핑 → 1·2·3안 경로 제안</div>`;
     $("scenSafe").innerHTML = html;
   }
 

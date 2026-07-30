@@ -86,8 +86,9 @@
     return d;
   }
 
-  // 전체 위험도 필드. 모든 유효 셀을 발화원으로 합산. applyPings=발화가중 핑 반영.
-  function computeField(layout, applyPings) {
+  // 전체 위험도 필드. 모든 유효 셀을 발화원으로 합산.
+  // applyPings=발화가중 핑 반영, extraPings=추가 핑(발화점 등, 셀→단계).
+  function computeField(layout, applyPings, extraPings) {
     const grid = buildGrid(layout);
     const { cols, rows, room, comps } = grid, n = cols * rows;
     const fire = new Float64Array(n), gas = new Float64Array(n);
@@ -106,10 +107,12 @@
       }
     };
     for (const s of sources) { const M = grid.eff[room[s]]; emit(s, M.ig, M.alpha, M.tox); }
-    if (applyPings && layout.weightPings)                     // 점 가중치(핑, 1~5단계)
-      for (const [cell, level] of Object.entries(layout.weightPings)) {
+    if (applyPings) {                                         // 점 가중치(회사 핑 + 발화점 등)
+      const pings = Object.assign({}, layout.weightPings || {}, extraPings || {});
+      for (const [cell, level] of Object.entries(pings)) {
         const s = +cell; if (room[s] >= 0) emit(s, level * RISK.pingW, RISK.pingAlpha, RISK.pingTox);
       }
+    }
     // 발화원 격자 봉우리를 블러로 퍼뜨려 점무늬 제거
     const fb = blurField(fire, room, cols, rows, RISK.blur);
     const gb = blurField(gas, room, cols, rows, RISK.blur);
@@ -188,7 +191,64 @@
     return { entry, target, path: path.reverse() };
   }
 
-  const api = { buildGrid, computeField, scenarioField, safestPath, wallResist };
+  // 다요소 대각 경로 탐색 — 노출·거리·벽 통과를 종합. 노출가중치를 달리해 여러 안 생성.
+  const N8 = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1, -1, 1.4142], [-1, 1, 1.4142], [-1, -1, 1.4142]];
+  function onePath(grid, field, target, expW, penalty) {
+    const { cols, rows, room, cs } = grid, n = cols * rows;
+    let entry = -1;                          // 외곽 최저노출 = 진입점
+    for (let gy = 0; gy < rows; gy++) for (let gx = 0; gx < cols; gx++) {
+      const i = gy * cols + gx; if (room[i] < 0) continue;
+      if (!(gx === 0 || gy === 0 || gx === cols - 1 || gy === rows - 1)) continue;
+      if (entry < 0 || field[i] < field[entry]) entry = i;
+    }
+    if (entry < 0) return null;
+    const d = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1);
+    d[entry] = 0; const heap = [[0, entry]];
+    const push = (p, v) => { heap.push([p, v]); let c = heap.length - 1; while (c > 0) { const par = (c - 1) >> 1; if (heap[par][0] <= heap[c][0]) break;[heap[par], heap[c]] = [heap[c], heap[par]]; c = par; } };
+    const pop = () => { const t = heap[0], l = heap.pop(); if (heap.length) { heap[0] = l; let c = 0; for (; ;) { let a = 2 * c + 1, b = a + 1, m = c; if (a < heap.length && heap[a][0] < heap[m][0]) m = a; if (b < heap.length && heap[b][0] < heap[m][0]) m = b; if (m === c) break;[heap[m], heap[c]] = [heap[c], heap[m]]; c = m; } } return t; };
+    while (heap.length) {
+      const [du, u] = pop(); if (du > d[u]) continue; if (u === target) break;
+      const ux = u % cols, uy = (u / cols) | 0;
+      for (const [dx, dy, len] of N8) {
+        const nx = ux + dx, ny = uy + dy; if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const v = ny * cols + nx; if (room[v] < 0) continue;
+        if (dx && dy && (room[uy * cols + nx] < 0 || room[ny * cols + ux] < 0)) continue; // 코너 컷 금지
+        let cost = len * cs + field[v] * expW * cs * 0.4 + (penalty ? penalty[v] : 0);     // 이동 + 노출 + 우회 페널티
+        if (room[v] !== room[u]) cost += (3 + 8 * wallResist(grid, room[u], room[v])) * cs * 0.3; // 벽 통과(문/차단)
+        const nd = du + cost;
+        if (nd < d[v]) { d[v] = nd; prev[v] = u; push(nd, v); }
+      }
+    }
+    if (d[target] === Infinity) return null;
+    const path = []; for (let c = target; c >= 0; c = prev[c]) path.push(c); path.reverse();
+    let dist = 0, expSum = 0;
+    for (let i = 0; i < path.length; i++) {
+      expSum += field[path[i]];
+      if (i) { const a = path[i - 1], b = path[i]; const dxx = Math.abs(a % cols - b % cols), dyy = Math.abs((a / cols | 0) - (b / cols | 0)); dist += (dxx && dyy ? 1.4142 : 1) * cs; }
+    }
+    return { entry, path, dist, avgExp: expSum / path.length };
+  }
+  // 1·2·3안 = 이전 경로 통로에 페널티를 줘 서로 우회하는 세 대안 경로
+  function safePaths(grid, field, target, count) {
+    if (target < 0 || grid.room[target] < 0) return null;
+    const { cols, rows, cs } = grid, n = cols * rows;
+    const pen = new Float64Array(n), names = ["최적", "대안 A", "대안 B"], out = [];
+    for (let k = 0; k < (count || 3); k++) {
+      const r = onePath(grid, field, target, 12, pen);
+      if (!r) break;
+      out.push(Object.assign({ name: names[k] }, r));
+      for (const c of r.path) {                 // 이 경로 통로 + 인접 셀에 페널티 → 다음 안은 우회
+        const cx = c % cols, cy = (c / cols) | 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+          pen[ny * cols + nx] += 45 * cs;
+        }
+      }
+    }
+    return out.length ? out : null;
+  }
+
+  const api = { buildGrid, computeField, scenarioField, safestPath, safePaths, wallResist };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.FIRE_RISK = api;
 })(typeof window !== "undefined" ? window : globalThis);
