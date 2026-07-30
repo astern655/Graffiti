@@ -90,7 +90,7 @@
   .kv b{color:var(--txt);font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
   .muted{color:var(--dim);font-size:12px;line-height:1.6}
   .matedit{display:none} .matedit.show{display:block}
-  select#matSel,select#floorSel,select#ignSel{width:100%;padding:9px 11px;border:1px solid var(--line);
+  select#matSel,select#floorSel,select#ignSel,select#scenCompany{width:100%;padding:9px 11px;border:1px solid var(--line);
     border-radius:9px;background:#fff;color:var(--txt);font-size:13px;cursor:pointer}
   .btn{border:1px solid var(--line);background:rgba(255,255,255,.7);color:var(--txt);border-radius:9px;
     padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:.12s}
@@ -111,8 +111,8 @@
       <div class="grp"><label>모드</label>
         <div class="seg" id="modeSeg">
           <button data-m="map" class="on">위험도 지도</button>
-          <button data-m="scenario">발화점 시나리오</button>
           <button data-m="weight">발화 가중치</button>
+          <button data-m="scenario">발화점 시나리오</button>
         </div></div>
       <span class="meta data" id="planMeta"></span>
     </div>
@@ -187,7 +187,9 @@
 
       <div class="card" id="scenCard" style="display:none">
         <h3>발화점 시나리오</h3>
-        <div class="muted" id="scenInfo">격자를 클릭해 발화점을 지정하세요. 여러 곳 선택 가능.</div>
+        <div class="muted" style="margin-bottom:4px">회사 가중치 불러오기</div>
+        <select id="scenCompany"><option value="">— 회사 선택 —</option></select>
+        <div class="muted" id="scenInfo" style="margin-top:10px">격자를 클릭해 발화점을 지정하세요. 여러 곳 선택 가능.</div>
         <div class="big" id="scenSafe" style="margin-top:8px"></div>
         <button id="scenClear" class="btn" style="margin-top:10px">발화점 초기화</button>
       </div>
@@ -210,9 +212,9 @@
     </div>
   </div>
 
-  <script src="data.js?v=17"></script>
-  <script src="risk.js?v=17"></script>
+  <script src="data.js?v=18"></script>
+  <script src="risk.js?v=18"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="ui.js?v=17"></script>
+  <script src="ui.js?v=18"></script>
 </body>
 </html>

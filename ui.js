@@ -43,7 +43,7 @@
     srcSet.clear(); scen = null; ping = -1; pathRes = null; editTarget = null;
     layout.weightPings = {}; weightField = null; // 격자 인덱스 의존 상태 초기화
     recompute();
-    if (mode === "scenario") recomputeScenario();
+    if (mode === "scenario") { loadCompanyList(); recomputeScenario(); }
     $("bldTitle").textContent = `${layout.geoName} — ${layout.title.split("·")[1].trim()}`;
     $("bldSub").textContent = `${layout.comps.length}개 구역 · ${field.grid.cols}×${field.grid.rows} 격자`;
     $("planMeta").textContent = `구역 ${layout.comps.length} · 셀 ${D.RISK.cell}m`;
@@ -248,6 +248,12 @@
     drawGridLines(g);
     drawOutlines();
     drawWalls(tierWallColor);   // 시나리오에도 경도(벽 진입난이도)+번호
+    // 불러온 회사 가중 지점(참고, 속 빈 링)
+    for (const [cell, level] of Object.entries(layout.weightPings || {})) {
+      const [X, Y] = cellXY(g, +cell);
+      ctx.save(); ctx.globalAlpha = .6; ctx.beginPath(); ctx.arc(X, Y, 7, 0, 7);
+      ctx.fillStyle = "#fff"; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = PLEVELS[Math.min(5, level) - 1]; ctx.stroke(); ctx.restore();
+    }
     // 안전 진입 경로
     if (pathRes && pathRes.path.length > 1) {
       ctx.save(); ctx.strokeStyle = "#2e78ff"; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.lineJoin = "round";
@@ -335,7 +341,7 @@
     $("layerSeg").style.pointerEvents = scenMode ? "none" : "auto";
     $("scenCard").style.display = scenMode ? "" : "none";
     updateLegends();
-    if (scenMode) { $("matEdit").classList.remove("show"); selectedId = null; recomputeScenario(); }
+    if (scenMode) { $("matEdit").classList.remove("show"); selectedId = null; loadCompanyList(); recomputeScenario(); }
     else if (weightMode) recomputeWeight();
     else render();
   });
@@ -465,6 +471,22 @@
     if (error) return cfg("불러오기 오류: " + error.message);
     if (!data) return cfg(`저장된 설정 없음 · ${company} / ${layout.id}`);
     applySnapshot(data.data); cfg(`불러옴 · ${company} / ${layout.id}`);
+  });
+
+  // 시나리오: 이 도면에 저장된 회사 목록 채우기
+  async function loadCompanyList() {
+    const sel = $("scenCompany");
+    if (!SB) { sel.innerHTML = '<option value="">클라우드 연결 불가</option>'; return; }
+    const { data } = await SB.from("configs").select("company").eq("layout", layout.id);
+    const names = [...new Set((data || []).map(r => r.company))].sort();
+    sel.innerHTML = '<option value="">— 회사 선택 —</option>' + names.map(n => `<option value="${n}">${n}</option>`).join("");
+  }
+  // 회사 선택 → 그 회사의 가중치·자재 불러와 시나리오 기반으로
+  $("scenCompany").addEventListener("change", async e => {
+    const company = e.target.value; if (!company || !SB) return;
+    const { data } = await SB.from("configs").select("data").eq("company", company).eq("layout", layout.id).maybeSingle();
+    if (data) applySnapshot(data.data);   // 자재+가중치 적용 → recompute + recomputeScenario
+    $("scenInfo").textContent = data ? `${company} 가중치 로드됨 · 발화점을 추가하세요` : "설정 없음";
   });
 
   buildSelect();
