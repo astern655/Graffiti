@@ -30,11 +30,11 @@
   // 실 구획 (배경 이미지 대비 비율 rect) + 기본 기자재. 사용자 재구획(색 구역) 반영.
   // 순서 = 겹침 우선순위: 작은 구역(욕실·현관)을 먼저 둔다.
   const ROOMS_F = [
-    { name:"욕실",   mat:"masonry_tile", fx:0.08, fy:0.10, fw:0.34, fh:0.26 }, // 초록
-    { name:"현관",   mat:"conc_fire",    fx:0.41, fy:0.07, fw:0.50, fh:0.16 }, // 파랑
-    { name:"주방",   mat:"conc_eps_gyp", fx:0.06, fy:0.22, fw:0.86, fh:0.33 }, // 노랑
-    { name:"거실",   mat:"conc_eps_gyp", fx:0.07, fy:0.54, fw:0.87, fh:0.29 }, // 빨강
-    { name:"발코니", mat:"glass_rail",   fx:0.08, fy:0.82, fw:0.84, fh:0.15 }, // 자홍
+    { name:"욕실",   mat:"masonry_tile", fx:0.05, fy:0.05,  fw:0.38, fh:0.28  }, // 초록 (벽: x42-363, y100-660)
+    { name:"현관",   mat:"conc_fire",    fx:0.44, fy:0.05,  fw:0.53, fh:0.145 }, // 파랑 (x371-818, y100-390)
+    { name:"주방",   mat:"conc_eps_gyp", fx:0.05, fy:0.195, fw:0.92, fh:0.33  }, // 노랑 (x42-818, y390-1050)
+    { name:"거실",   mat:"conc_eps_gyp", fx:0.05, fy:0.525, fw:0.92, fh:0.255 }, // 빨강 (x42-818, y1050-1560)
+    { name:"발코니", mat:"glass_rail",   fx:0.05, fy:0.78,  fw:0.92, fh:0.19  }, // 자홍 (x42-818, y1560-1940)
   ];
   let rooms = [], selRoom = null;
   const buildRooms = () => { rooms = ROOMS_F.map(r => ({ name:r.name, mat:r.mat, x:r.fx*BG_W, y:r.fy*BG_H, w:r.fw*BG_W, d:r.fh*BG_H })); selRoom = null; };
@@ -134,10 +134,11 @@
     if (mode==="mat"){
       for (const rm of rooms){
         const on = rm===selRoom;
+        // 프레임은 항상 동일(위치·점선·두께), 선택 시 색만 파랑 + 옅은 채움
         if (on){ ctx.fillStyle="rgba(46,120,255,.12)"; ctx.fillRect(ox+S(rm.x),oy+S(rm.y),S(rm.w),S(rm.d)); }
         ctx.strokeStyle = on ? "#2e78ff" : "rgba(30,40,60,.6)";
-        ctx.lineWidth = on ? 3 : 1.5;
-        ctx.setLineDash(on ? [] : [7,4]);
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([7,4]);
         ctx.strokeRect(ox+S(rm.x), oy+S(rm.y), S(rm.w), S(rm.d));
         ctx.setLineDash([]);
         // 구역 이름 배지
