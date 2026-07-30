@@ -92,9 +92,14 @@
   .matedit{display:none} .matedit.show{display:block}
   select#matSel,select#floorSel,select#ignSel{width:100%;padding:9px 11px;border:1px solid var(--line);
     border-radius:9px;background:#fff;color:var(--txt);font-size:13px;cursor:pointer}
-  .btn{border:1px solid var(--line);background:#f6f8fa;color:var(--txt);border-radius:9px;
+  .btn{border:1px solid var(--line);background:rgba(255,255,255,.7);color:var(--txt);border-radius:9px;
     padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:.12s}
-  .btn:hover{background:#eef1f4}
+  .btn:hover{background:#fff}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.pri:hover{background:#0e8c65}
+  #company{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;
+    color:var(--txt);font-size:13px;margin-bottom:8px}
+  .rowbtn{display:flex;gap:8px}.rowbtn .btn{flex:1}
   @media(max-width:960px){ .wrap{grid-template-columns:1fr} }
 </style>
 </head>
@@ -158,6 +163,16 @@
       </div>
 
       <div class="card">
+        <h3>회사별 설정 · 클라우드</h3>
+        <input id="company" placeholder="회사명 (예: A건설)">
+        <div class="rowbtn">
+          <button id="saveCfg" class="btn pri">저장</button>
+          <button id="loadCfg" class="btn">불러오기</button>
+        </div>
+        <div class="muted" id="cfgStatus" style="margin-top:8px">현재 도면의 가중치·자재를 회사명으로 저장/복원합니다.</div>
+      </div>
+
+      <div class="card">
         <h3>위험도 요약</h3>
         <div class="muted">최고 위험 지점</div>
         <div class="big" id="hotSpot">–</div>
@@ -195,8 +210,9 @@
     </div>
   </div>
 
-  <script src="data.js?v=16"></script>
-  <script src="risk.js?v=16"></script>
-  <script src="ui.js?v=16"></script>
+  <script src="data.js?v=17"></script>
+  <script src="risk.js?v=17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="ui.js?v=17"></script>
 </body>
 </html>

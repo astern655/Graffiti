@@ -432,6 +432,41 @@
     recompute(); if (mode === "scenario") recomputeScenario(); else if (mode === "weight") recomputeWeight();
   });
 
+  // ── 회사별 설정 클라우드 저장 (Supabase) ──
+  const SB = window.supabase ? window.supabase.createClient(
+    "https://euqpicarqsulcfdoeuls.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1cXBpY2FycXN1bGNmZG9ldWxzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDYwNDQsImV4cCI6MjEwMDkyMjA0NH0.7VbZUiFfr2vgJjGfN4iSzQCjHnibFmGzcO23VvVp8bg"
+  ) : null;
+  const cfg = m => { $("cfgStatus").textContent = m; };
+  const snapshot = () => ({
+    weightPings: layout.weightPings || {}, wallMat: layout.wallMat || {},
+    comps: layout.comps.map(c => ({ id: c.id, material: c.material, floorMat: c.floorMat })),
+  });
+  function applySnapshot(d) {
+    (d.comps || []).forEach(sc => { const c = layout.comps.find(x => x.id === sc.id); if (c) { c.material = sc.material; c.floorMat = sc.floorMat || sc.material; } });
+    layout.wallMat = d.wallMat || {}; layout.weightPings = d.weightPings || {};
+    recompute(); if (mode === "scenario") recomputeScenario(); else if (mode === "weight") recomputeWeight();
+  }
+  $("saveCfg").addEventListener("click", async () => {
+    if (!SB) return cfg("클라우드 연결 불가 (온라인에서 사용)");
+    const company = $("company").value.trim(); if (!company) return cfg("회사명을 입력하세요");
+    cfg("저장 중…");
+    const { error } = await SB.from("configs").upsert(
+      { company, layout: layout.id, data: snapshot(), updated_at: new Date().toISOString() },
+      { onConflict: "company,layout" });
+    cfg(error ? "저장 오류: " + error.message : `저장됨 · ${company} / ${layout.id}`);
+  });
+  $("loadCfg").addEventListener("click", async () => {
+    if (!SB) return cfg("클라우드 연결 불가 (온라인에서 사용)");
+    const company = $("company").value.trim(); if (!company) return cfg("회사명을 입력하세요");
+    cfg("불러오는 중…");
+    const { data, error } = await SB.from("configs").select("data")
+      .eq("company", company).eq("layout", layout.id).maybeSingle();
+    if (error) return cfg("불러오기 오류: " + error.message);
+    if (!data) return cfg(`저장된 설정 없음 · ${company} / ${layout.id}`);
+    applySnapshot(data.data); cfg(`불러옴 · ${company} / ${layout.id}`);
+  });
+
   buildSelect();
   selectLayout(LAYOUTS[1].id); // L02 패널 경제형 — 위험 뚜렷
   updateLegends();
