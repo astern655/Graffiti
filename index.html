@@ -43,6 +43,10 @@
   .brand .tag{color:var(--dim);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;
     border-left:1px solid var(--line);padding-left:10px;align-self:center}
   .ctrls{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-left:auto}
+  .navbtn{display:inline-flex;align-items:center;gap:6px;padding:8px 15px;border-radius:9px;
+    background:linear-gradient(135deg,#2e78ff,#12a074);color:#fff;font-size:13px;font-weight:700;
+    text-decoration:none;box-shadow:0 2px 8px rgba(46,120,255,.3);transition:transform .12s,box-shadow .12s}
+  .navbtn:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(46,120,255,.42)}
   .grp{display:flex;align-items:center;gap:8px}
   .grp>label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
   .cmd select{background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:10px;
@@ -115,6 +119,7 @@
           <button data-m="scenario">발화점 시나리오</button>
         </div></div>
       <span class="meta data" id="planMeta"></span>
+      <a href="map.html" class="navbtn">실도면 뷰어 →</a>
     </div>
   </header>
 
