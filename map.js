@@ -29,16 +29,21 @@
 
   // 실 구획 (배경 이미지 대비 비율 rect) + 기본 기자재. 사용자 재구획(색 구역) 반영.
   // 순서 = 겹침 우선순위: 작은 구역(욕실·현관)을 먼저 둔다.
+  // 각 실은 하나 이상의 사각형(rects)으로 구성 → 주방 등 ㄴ자 형태 표현.
   const ROOMS_F = [
-    { name:"욕실",   mat:"masonry_tile", fx:0.05, fy:0.05,  fw:0.38, fh:0.28  }, // 초록 (벽: x42-363, y100-660)
-    { name:"현관",   mat:"conc_fire",    fx:0.44, fy:0.05,  fw:0.53, fh:0.145 }, // 파랑 (x371-818, y100-390)
-    { name:"주방",   mat:"conc_eps_gyp", fx:0.05, fy:0.195, fw:0.92, fh:0.33  }, // 노랑 (x42-818, y390-1050)
-    { name:"거실",   mat:"conc_eps_gyp", fx:0.05, fy:0.525, fw:0.92, fh:0.255 }, // 빨강 (x42-818, y1050-1560)
-    { name:"발코니", mat:"glass_rail",   fx:0.05, fy:0.78,  fw:0.92, fh:0.19  }, // 자홍 (x42-818, y1560-1940)
+    { name:"욕실",   mat:"masonry_tile", rects:[ {fx:0.05,fy:0.05, fw:0.38,fh:0.28} ] }, // 초록
+    { name:"현관",   mat:"conc_fire",    rects:[ {fx:0.44,fy:0.05, fw:0.53,fh:0.145} ] }, // 파랑
+    { name:"주방",   mat:"conc_eps_gyp", rects:[                                          // 노랑 · ㄴ자
+        {fx:0.05,fy:0.33, fw:0.92,fh:0.195},   // 하부 전폭
+        {fx:0.43,fy:0.195,fw:0.54,fh:0.135},   // 상부 우측(욕실 옆) → 욕실이 좌상단을 파먹어 ㄴ자
+    ] },
+    { name:"거실",   mat:"conc_eps_gyp", rects:[ {fx:0.05,fy:0.525,fw:0.92,fh:0.255} ] }, // 빨강
+    { name:"발코니", mat:"glass_rail",   rects:[ {fx:0.05,fy:0.78, fw:0.92,fh:0.19} ] },  // 자홍
   ];
   let rooms = [], selRoom = null;
-  const buildRooms = () => { rooms = ROOMS_F.map(r => ({ name:r.name, mat:r.mat, x:r.fx*BG_W, y:r.fy*BG_H, w:r.fw*BG_W, d:r.fh*BG_H })); selRoom = null; };
-  const roomAt = (x,y) => rooms.find(r => x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.d);
+  const buildRooms = () => { rooms = ROOMS_F.map(r => ({ name:r.name, mat:r.mat,
+    rects: r.rects.map(f=>({ x:f.fx*BG_W, y:f.fy*BG_H, w:f.fw*BG_W, d:f.fh*BG_H })) })); selRoom = null; };
+  const roomAt = (x,y) => rooms.find(r => r.rects.some(rc => x>=rc.x && x<=rc.x+rc.w && y>=rc.y && y<=rc.y+rc.d));
 
   // ── 회사 가중치 (②단계, 디폴트에 가산). 시작 비어있음. ──
   let pings = [], curLevel = 3;
@@ -134,17 +139,18 @@
     if (mode==="mat"){
       for (const rm of rooms){
         const on = rm===selRoom;
-        // 프레임은 항상 동일(위치·점선·두께), 선택 시 색만 파랑 + 옅은 채움
-        if (on){ ctx.fillStyle="rgba(46,120,255,.12)"; ctx.fillRect(ox+S(rm.x),oy+S(rm.y),S(rm.w),S(rm.d)); }
-        ctx.strokeStyle = on ? "#2e78ff" : "rgba(30,40,60,.6)";
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([7,4]);
-        ctx.strokeRect(ox+S(rm.x), oy+S(rm.y), S(rm.w), S(rm.d));
-        ctx.setLineDash([]);
-        // 구역 이름 배지
-        const fs=Math.max(10,Math.min(15,scale*0.28));
+        // 프레임은 항상 동일(위치·점선·두께), 선택 시 색만 파랑 + 옅은 채움. 실은 여러 rect(ㄴ자 등).
+        for (const rc of rm.rects){
+          if (on){ ctx.fillStyle="rgba(46,120,255,.12)"; ctx.fillRect(ox+S(rc.x),oy+S(rc.y),S(rc.w),S(rc.d)); }
+          ctx.strokeStyle = on ? "#2e78ff" : "rgba(30,40,60,.6)";
+          ctx.lineWidth = 1.8; ctx.setLineDash([7,4]);
+          ctx.strokeRect(ox+S(rc.x), oy+S(rc.y), S(rc.w), S(rc.d));
+          ctx.setLineDash([]);
+        }
+        // 구역 이름 배지 (첫 rect 좌상단)
+        const b=rm.rects[0], fs=Math.max(10,Math.min(15,scale*0.28));
         ctx.font=`700 ${fs}px "Segoe UI"`; const tw=ctx.measureText(rm.name).width;
-        const bx=ox+S(rm.x)+4, by=oy+S(rm.y)+4;
+        const bx=ox+S(b.x)+4, by=oy+S(b.y)+4;
         ctx.fillStyle = on ? "rgba(46,120,255,.92)" : "rgba(30,40,60,.78)";
         ctx.fillRect(bx, by, tw+10, fs+7);
         ctx.fillStyle="#fff"; ctx.textBaseline="top"; ctx.fillText(rm.name, bx+5, by+4); ctx.textBaseline="alphabetic";
